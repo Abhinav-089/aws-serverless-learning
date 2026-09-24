@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serverless on AWS — Architecture Notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B1220;
+    --bg-panel:#0F1A2B;
+    --grid:#1C2A3E;
+    --text:#E8EDF4;
+    --text-dim:#8DA0BC;
+    --blue:#4A9EFF;
+    --amber:#FFB454;
+    --green:#4ADE80;
+    --line: rgba(74,158,255,0.35);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0/40px 40px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/40px 40px,
+      var(--bg);
+    color:var(--text);
+    font-family:'Space Grotesk', sans-serif;
+    line-height:1.5;
+  }
+  .mono{font-family:'JetBrains Mono', monospace;}
+  .wrap{max-width:960px; margin:0 auto; padding:0 24px;}
+
+  header.hero{padding:96px 0 64px;}
+  .tag{
+    display:inline-block;
+    color:var(--amber);
+    font-size:13px;
+    letter-spacing:0.02em;
+    margin-bottom:20px;
+    border:1px solid rgba(255,180,84,0.35);
+    padding:5px 12px;
+    border-radius:3px;
+  }
+  h1{
+    font-size:clamp(32px, 5.5vw, 54px);
+    font-weight:700;
+    line-height:1.12;
+    max-width:14ch;
+  }
+  h1 span{color:var(--blue);}
+  .lede{
+    margin-top:20px;
+    max-width:56ch;
+    color:var(--text-dim);
+    font-size:17px;
+  }
+  .hero-actions{margin-top:36px; display:flex; gap:14px; flex-wrap:wrap;}
+  .btn{
+    font-family:inherit;
+    font-size:15px;
+    padding:11px 20px;
+    border-radius:4px;
+    text-decoration:none;
+    display:inline-block;
+    border:1px solid transparent;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .btn-primary{background:var(--blue); color:#04101F; font-weight:500;}
+  .btn-primary:hover{background:#6EB2FF;}
+  .btn-ghost{border-color:var(--grid); color:var(--text);}
+  .btn-ghost:hover{border-color:var(--blue);}
+
+  section{padding:56px 0; border-top:1px solid var(--grid);}
+  h2{
+    font-size:22px;
+    color:var(--text);
+    margin-bottom:8px;
+  }
+  .section-note{color:var(--text-dim); font-size:15px; max-width:60ch; margin-bottom:36px;}
+
+  /* Diagram */
+  .diagram-frame{
+    background:var(--bg-panel);
+    border:1px solid var(--grid);
+    border-radius:6px;
+    padding:16px;
+    overflow-x:auto;
+  }
+  .diagram-frame svg{display:block; min-width:640px; width:100%; height:auto;}
+  .node-label{font-family:'JetBrains Mono', monospace; font-size:12px; fill:var(--text);}
+  .node-sub{font-family:'JetBrains Mono', monospace; font-size:10px; fill:var(--text-dim);}
+
+  /* Flow steps */
+  .steps{display:grid; gap:0;}
+  .step{
+    display:grid;
+    grid-template-columns:56px 1fr;
+    gap:20px;
+    padding:20px 0;
+    border-top:1px solid var(--grid);
+  }
+  .step:first-child{border-top:none;}
+  .step-num{font-family:'JetBrains Mono', monospace; color:var(--amber); font-size:14px; padding-top:2px;}
+  .step h3{font-size:16px; font-weight:500; margin-bottom:4px;}
+  .step p{color:var(--text-dim); font-size:14.5px; max-width:62ch;}
+
+  /* Stack grid */
+  .stack-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));
+    gap:1px;
+    background:var(--grid);
+    border:1px solid var(--grid);
+  }
+  .stack-item{background:var(--bg); padding:20px;}
+  .stack-item .k{font-family:'JetBrains Mono', monospace; font-size:12px; color:var(--blue); margin-bottom:6px;}
+  .stack-item .v{font-size:15px; margin-bottom:6px;}
+  .stack-item .d{font-size:13px; color:var(--text-dim);}
+
+  /* Path / roadmap */
+  .path{display:flex; flex-direction:column; gap:0;}
+  .path-row{
+    display:grid;
+    grid-template-columns:120px 1fr;
+    gap:20px;
+    padding:18px 0;
+    border-top:1px solid var(--grid);
+    align-items:baseline;
+  }
+  .path-row:first-child{border-top:none;}
+  .phase{font-family:'JetBrains Mono', monospace; font-size:12px;}
+  .phase.now{color:var(--green);}
+  .phase.next{color:var(--amber);}
+  .path-row p{color:var(--text-dim); font-size:14.5px;}
+  .path-row strong{color:var(--text); font-weight:500;}
+
+  footer{
+    padding:48px 0 64px;
+    border-top:1px solid var(--grid);
+    color:var(--text-dim);
+    font-size:13.5px;
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  footer a{color:var(--blue); text-decoration:none;}
+  footer a:hover{text-decoration:underline;}
+
+  @media (max-width:600px){
+    .step, .path-row{grid-template-columns:1fr;}
+    header.hero{padding:64px 0 48px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <span class="tag mono">learning project — architecture walkthrough</span>
+    <h1>A serverless app on AWS, <span>explained before it's deployed.</span></h1>
+    <p class="lede">This page maps out a static frontend + serverless API architecture on AWS. It's hosted here on GitHub Pages for now — the AWS pieces (S3, CloudFront, Lambda, API Gateway, DynamoDB) come next, once the design is settled.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#diagram">View the architecture</a>
+      <a class="btn btn-ghost" href="#roadmap">See the deploy plan</a>
+    </div>
+  </header>
+
+  <section id="diagram">
+    <h2>The architecture</h2>
+    <p class="section-note">A static site served from S3 through CloudFront, with a separate serverless API path for anything dynamic.</p>
+    <div class="diagram-frame">
+      <svg viewBox="0 0 900 340" xmlns="http://www.w3.org/2000/svg">
+        <!-- connecting lines -->
+        <line x1="90" y1="80" x2="220" y2="80" stroke="var(--line)" stroke-width="2"/>
+        <line x1="330" y1="80" x2="460" y2="80" stroke="var(--line)" stroke-width="2"/>
+        <line x1="90" y1="90" x2="90" y2="230" stroke="var(--line)" stroke-width="2"/>
+        <line x1="90" y1="230" x2="220" y2="230" stroke="var(--line)" stroke-width="2"/>
+        <line x1="330" y1="230" x2="460" y2="230" stroke="var(--line)" stroke-width="2"/>
+        <line x1="570" y1="230" x2="700" y2="230" stroke="var(--line)" stroke-width="2"/>
+
+        <!-- arrowheads -->
+        <polygon points="220,80 210,75 210,85" fill="var(--blue)"/>
+        <polygon points="460,80 450,75 450,85" fill="var(--blue)"/>
+        <polygon points="220,230 210,225 210,235" fill="var(--amber)"/>
+        <polygon points="460,230 450,225 450,235" fill="var(--amber)"/>
+        <polygon points="700,230 690,225 690,235" fill="var(--amber)"/>
+
+        <!-- Client -->
+        <rect x="10" y="55" width="80" height="50" rx="4" fill="none" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="50" y="76" text-anchor="middle" class="node-label">Client</text>
+        <text x="50" y="92" text-anchor="middle" class="node-sub">browser</text>
+
+        <!-- CloudFront -->
+        <rect x="220" y="55" width="110" height="50" rx="4" fill="none" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="275" y="76" text-anchor="middle" class="node-label">CloudFront</text>
+        <text x="275" y="92" text-anchor="middle" class="node-sub">CDN + HTTPS</text>
+
+        <!-- S3 -->
+        <rect x="460" y="55" width="110" height="50" rx="4" fill="none" stroke="var(--blue)" stroke-width="1.5"/>
+        <text x="515" y="76" text-anchor="middle" class="node-label">S3 bucket</text>
+        <text x="515" y="92" text-anchor="middle" class="node-sub">static site</text>
+
+        <!-- API Gateway -->
+        <rect x="220" y="205" width="110" height="50" rx="4" fill="none" stroke="var(--amber)" stroke-width="1.5"/>
+        <text x="275" y="226" text-anchor="middle" class="node-label">API Gateway</text>
+        <text x="275" y="242" text-anchor="middle" class="node-sub">REST endpoint</text>
+
+        <!-- Lambda -->
+        <rect x="460" y="205" width="110" height="50" rx="4" fill="none" stroke="var(--amber)" stroke-width="1.5"/>
+        <text x="515" y="226" text-anchor="middle" class="node-label">Lambda</text>
+        <text x="515" y="242" text-anchor="middle" class="node-sub">function</text>
+
+        <!-- DynamoDB -->
+        <rect x="700" y="205" width="120" height="50" rx="4" fill="none" stroke="var(--amber)" stroke-width="1.5"/>
+        <text x="760" y="226" text-anchor="middle" class="node-label">DynamoDB</text>
+        <text x="760" y="242" text-anchor="middle" class="node-sub">table</text>
+
+        <!-- legend -->
+        <line x1="10" y1="300" x2="30" y2="300" stroke="var(--blue)" stroke-width="2"/>
+        <text x="36" y="304" class="node-sub">frontend path</text>
+        <line x1="150" y1="300" x2="170" y2="300" stroke="var(--amber)" stroke-width="2"/>
+        <text x="176" y="304" class="node-sub">API path</text>
+      </svg>
+    </div>
+  </section>
+
+  <section>
+    <h2>How a request flows</h2>
+    <p class="section-note">Two paths: one serves the page, the other serves data.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num mono">01</div>
+        <div>
+          <h3>Browser requests the site</h3>
+          <p>CloudFront caches and serves the static files (HTML, CSS, JS) that live in the S3 bucket, over HTTPS with a CDN edge close to the visitor.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num mono">02</div>
+        <div>
+          <h3>Page loads, calls the API</h3>
+          <p>Client-side JS calls an endpoint exposed by API Gateway — the same S3/CloudFront path never touches application logic directly.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num mono">03</div>
+        <div>
+          <h3>Gateway triggers a Lambda function</h3>
+          <p>API Gateway routes the request to a Lambda function, which runs only for the duration of that request — no server to keep running or patch.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num mono">04</div>
+        <div>
+          <h3>Lambda reads or writes DynamoDB</h3>
+          <p>The function talks to a DynamoDB table for anything that needs to persist, then returns a response back up the same chain.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>The stack</h2>
+    <p class="section-note">Every piece here is pay-per-use — nothing runs (or costs anything) while idle.</p>
+    <div class="stack-grid">
+      <div class="stack-item">
+        <div class="k">STORAGE</div>
+        <div class="v">S3</div>
+        <div class="d">Hosts the built static files.</div>
+      </div>
+      <div class="stack-item">
+        <div class="k">DELIVERY</div>
+        <div class="v">CloudFront</div>
+        <div class="d">CDN, caching, HTTPS at the edge.</div>
+      </div>
+      <div class="stack-item">
+        <div class="k">API</div>
+        <div class="v">API Gateway</div>
+        <div class="d">Routes and throttles requests.</div>
+      </div>
+      <div class="stack-item">
+        <div class="k">COMPUTE</div>
+        <div class="v">Lambda</div>
+        <div class="d">Runs the backend logic on demand.</div>
+      </div>
+      <div class="stack-item">
+        <div class="k">DATA</div>
+        <div class="v">DynamoDB</div>
+        <div class="d">Key-value store for app data.</div>
+      </div>
+      <div class="stack-item">
+        <div class="k">TODAY</div>
+        <div class="v">GitHub Pages</div>
+        <div class="d">Stands in for S3 + CloudFront while the design settles.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <h2>Deploy plan</h2>
+    <p class="section-note">Where this project is now, and what moving it to AWS actually involves.</p>
+    <div class="path">
+      <div class="path-row">
+        <div class="phase now mono">NOW</div>
+        <p><strong>Static site on GitHub Pages.</strong> This page, hosted for free, no AWS account needed yet — good for sharing the idea and iterating on design.</p>
+      </div>
+      <div class="path-row">
+        <div class="phase next mono">NEXT</div>
+        <p><strong>Move hosting to S3 + CloudFront.</strong> Upload the same files to an S3 bucket, put CloudFront in front of it, attach a custom domain if wanted.</p>
+      </div>
+      <div class="path-row">
+        <div class="phase next mono">NEXT</div>
+        <p><strong>Add the API layer.</strong> Write one small Lambda function, wire it to API Gateway, and give it a DynamoDB table for whatever needs to persist.</p>
+      </div>
+      <div class="path-row">
+        <div class="phase next mono">LATER</div>
+        <p><strong>Automate it.</strong> A GitHub Actions workflow that deploys straight to AWS on every push, instead of uploading by hand.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Built as a learning project — architecture subject to change.</span>
+    <a href="https://github.com" target="_blank" rel="noopener">View on GitHub →</a>
+  </footer>
+</div>
+
+</body>
+</html>
